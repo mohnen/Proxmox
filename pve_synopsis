@@ -1,3 +1,45 @@
-#!/bin/bash
-echo 42
+#!/usr/bin/env bash
 
+function PVE_CHECK() {
+  echo "Cheching PVE version"
+  PVE=$(pveversion | grep "pve-manager/7" | wc -l)
+
+  if [[ $PVE != 1 ]]; then
+    echo "This script requires Proxmox Virtual Environment 7.0 or greater"
+    echo "Exiting..."
+    sleep 2
+    exit
+  fi
+}
+
+function main() {
+  echo ""
+  while true; do
+    read -p "This will update the node's description with information on all LXCs.
+Proceed(y/n)? " yn
+    case $yn in
+      [Yy]* ) break;;
+      [Nn]* ) exit;;
+      * ) echo "Please answer yes or no.";;
+    esac
+  done
+  PVE_CHECK
+
+  lxcs=$(lxc-ls)
+  for lxc in $lxcs; do
+     ips=$(lxc-info $lxc | grep IP | sed -e 's/IP: *//')
+     hostname=$(pct config $lxc | grep hostname | sed -e 's/hostname: *//')
+     echo $lxc $hostname $ips
+     for ip in $ips; do
+        ports=$(nmap  -oX - $ip | grep '<port ' | sed -e 's/.*portid="\([0-9]*\)".*/\1/' -e 's///')
+        for port in $ports; do
+           wget -q -t1 http://$ip:$port
+	   echo $ip:$port http $?
+           wget -q -t1 --no-check-certificate https://$ip:$port
+	   echo $ip:$port https $?
+	done
+     done
+  done 
+}
+
+main
