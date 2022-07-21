@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 
 function PVE_CHECK() {
-  echo "Cheching PVE version"
+  echo "Checking PVE version"
   PVE=$(pveversion | grep "pve-manager/7" | wc -l)
 
   if [[ $PVE != 1 ]]; then
     echo "This script requires Proxmox Virtual Environment 7.0 or greater"
     echo "Exiting..."
-    sleep 2
     exit
   fi
+}
+
+xmlgetnext () {
+  local IFS='>'
+  read -d '<' TAG VALUE
 }
 
 function main() {
@@ -29,14 +33,18 @@ Proceed(y/n)? " yn
   for lxc in $lxcs; do
      ips=$(lxc-info $lxc | grep IP | sed -e 's/IP: *//')
      hostname=$(pct config $lxc | grep hostname | sed -e 's/hostname: *//')
-     echo $lxc $hostname $ips
      for ip in $ips; do
-        ports=$(nmap  -oX - $ip | grep '<port ' | sed -e 's/.*portid="\([0-9]*\)".*/\1/' -e 's///')
+        echo "Checking ports of $lxc($hostname) at $ip"
+        ports=$(nmap  -p- -oX - $ip | grep '<port ' | sed -e 's/.*portid="\([0-9]*\)".*/\1/' -e 's///')
         for port in $ports; do
-           wget -q -t1 http://$ip:$port
-	   echo $ip:$port http $?
-           wget -q -t1 --no-check-certificate https://$ip:$port
-	   echo $ip:$port https $?
+           type=$(curl --connect-timeout 1 --location --silent --head --fail --output /dev/null --write-out '%{content_type}' http://$ip:$port)
+	   if [[ $? -eq 0 ]]; then
+              type=$(echo $type | sed -e 's/;.*//')
+	      if [ "$type" = "text/html" ]; then
+                title=$(curl --connect-timeout 1 --location --silent http://$ip:$port | (while xmlgetnext ; do TAG=$(echo $TAG| tr '[:upper:]' '[:lower:]') ; [ "$TAG" = "title" ] && echo $VALUE ; done))
+	        echo $title http://$ip:$port
+              fi
+	   fi 
 	done
      done
   done 
