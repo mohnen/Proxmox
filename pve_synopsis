@@ -31,21 +31,28 @@ Proceed(y/n)? " yn
 
   lxcs=$(lxc-ls)
   for lxc in $lxcs; do
-     ips=$(lxc-info $lxc | grep IP | sed -e 's/IP: *//')
      hostname=$(pct config $lxc | grep hostname | sed -e 's/hostname: *//')
+     ips=$(lxc-info $lxc | grep IP | sed -e 's/IP: *//' | tr '\n' ' ')
+     [ "$ips" == "" ] && echo "$lxc($hostname) has no IP ... not running?"
      for ip in $ips; do
         echo "Checking ports of $lxc($hostname) at $ip"
-        ports=$(nmap  -p- -oX - $ip | grep '<port ' | sed -e 's/.*portid="\([0-9]*\)".*/\1/' -e 's///')
-        for port in $ports; do
-           type=$(curl --connect-timeout 1 --location --silent --head --fail --output /dev/null --write-out '%{content_type}' http://$ip:$port)
-	   if [[ $? -eq 0 ]]; then
-              type=$(echo $type | sed -e 's/;.*//')
-	      if [ "$type" = "text/html" ]; then
-                title=$(curl --connect-timeout 1 --location --silent http://$ip:$port | (while xmlgetnext ; do TAG=$(echo $TAG| tr '[:upper:]' '[:lower:]') ; [ "$TAG" = "title" ] && echo $VALUE ; done))
-	        echo $title http://$ip:$port
-              fi
-	   fi 
-	done
+        ports=$(nmap  -p- -oX - $ip | grep '<port ' | sed -e 's/.*portid="\([0-9]*\)".*/\1/' -e 's///' | tr '\n' ' ')
+     	if [ "$ports" == "" ]; then
+           echo "  $lxc($hostname) has no open ports at $ip"
+        else
+          echo "  Open ports: $ports"
+	  for port in $ports; do
+             type=$(curl --connect-timeout 1 --location --silent --head --fail --output /dev/null --write-out '%{content_type}' http://$ip:$port)
+	     if [[ $? -eq 0 ]]; then
+               type=$(echo $type | sed -e 's/;.*//')
+	         if [ "$type" = "text/html" ]; then
+                    title=$(curl --connect-timeout 1 --location --silent http://$ip:$port | (while xmlgetnext ; do TAG=$(echo $TAG| tr '[:upper:]' '[:lower:]') ; [ "$TAG" = "title" ] && echo $VALUE ; done))
+                    [ "$title" == "" ] && title="(no title)"
+	            echo "  $title at http://$ip:$port"
+                 fi
+	     fi 
+	  done
+        fi
      done
   done 
 }
