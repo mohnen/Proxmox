@@ -29,7 +29,7 @@ Proceed(y/n)? " yn
   done
   PVE_CHECK
 
-  result="# Synopsis"$'\n'"| LXC | Ports | Web Sites |"$'\n'"|---|---|---|"
+  result="# Synopsis"$'\n'"| LXC | IP | Ports | Web Sites |"$'\n'"|---|---|---|---|"
   lxcs=$(lxc-ls)
   for lxc in $lxcs; do
      hostname=$(pct config $lxc | grep hostname | sed -e 's/hostname: *//')
@@ -38,7 +38,7 @@ Proceed(y/n)? " yn
      for ip in $ips; do
         echo "Checking ports of $lxc($hostname) at $ip"
         ports=$(nmap  -p- -oX - $ip | grep '<port ' | sed -e 's/.*portid="\([0-9]*\)".*/\1/' -e 's///' | tr '\n' ' ')
-        result="$result"$'\n'"| $lxc($hostname) $ip | $ports | "
+        result="$result"$'\n'"| $lxc($hostname) | $ip | $ports | "
      	if [ "$ports" == "" ]; then
            echo "  No open ports at $ip"
         else
@@ -59,7 +59,7 @@ Proceed(y/n)? " yn
         result="$result |"
      done
   done 
-  result="$result"$'\n\n'"$(date --rfc-email)"$'\n'
+  result="$result"$'\n\n'"Created: $(date --rfc-email)"$'\n'
   pvenode config set --description "$result"
 }
 
